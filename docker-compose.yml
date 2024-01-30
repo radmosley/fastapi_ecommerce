@@ -1,28 +1,45 @@
-# docker-compose.yml
-version: '3.8'
+volumes:
+  locale_test_data:
+    external: false
 
 services:
-  web:
-    build: .
-    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; uvicorn app.main:app --host 0.0.0.0'
-    volumes:
-      - .:/app
+  fastapi:
+    environment:
+      CORS_HOST: http://localhost:3000
+      DATABASE_URL: postgresql://example_user:secret@db/example
+      WAIT_HOST: db:5432
+      PORT: 8000
+      SIGNING_KEY: "example"
+    build:
+      context: api
+      dockerfile: Dockerfile.dev
     ports:
-      - 8008:8000
-    environment:
-      - DATABASE_URL=postgresql://fastapi_traefik:fastapi_traefik@db:5432/fastapi_traefik
-    depends_on:
-      - db
-  db:
-    image: postgres:15-alpine
+      - "8000:8000"
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    expose:
-      - 5432
-    environment:
-      - POSTGRES_USER=fastapi_traefik
-      - POSTGRES_PASSWORD=fastapi_traefik
-      - POSTGRES_DB=fastapi_traefik
+      - ./api:/app
 
-volumes:
-  postgres_data:
+  react:
+    image: node:lts-bullseye
+    command: /bin/bash run.sh
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000"
+    environment:
+      HOST_OS: ${OS}
+      NODE_ENV: development
+      HOST: "0.0.0.0"
+      PUBLIC_URL: http://localhost:3000
+      REACT_APP_API_HOST: ${REACT_APP_API_HOST}
+  db:
+    image: postgres:14.5-bullseye
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_USER: example_user
+      POSTGRES_DB: example
+    ports:
+      - "5432:5432"
+    volumes:
+      - locale_test_data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d
